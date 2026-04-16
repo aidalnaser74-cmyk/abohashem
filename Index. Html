@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بقالية أبو هاشم - نظام الأوزان</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f3f1; margin: 0; text-align: center; }
+        header { background: #27ae60; color: white; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        .cart-bar { background: #2c3e50; color: white; padding: 15px; position: sticky; top: 0; z-index: 1000; display: flex; justify-content: space-around; align-items: center; }
+        
+        #shop-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 30px; }
+        
+        .card { 
+            background: white; border-radius: 15px; width: 190px; padding: 15px; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05); transition: 0.3s; border: 1px solid #eee;
+        }
+        .card:hover { transform: translateY(-5px); }
+        
+        .product-img { width: 80px; height: 80px; object-fit: contain; margin-bottom: 10px; }
+        .price { color: #27ae60; font-weight: bold; font-size: 16px; margin: 5px 0; }
+        
+        /* تنسيق حقل الوزن */
+        .weight-input { 
+            width: 80%; padding: 8px; margin: 10px 0; border: 2px solid #ddd; 
+            border-radius: 8px; text-align: center; font-size: 14px; outline: none;
+        }
+        .weight-input:focus { border-color: #27ae60; }
+
+        button.btn-add { 
+            background: #e67e22; color: white; border: none; padding: 10px; 
+            border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; 
+        }
+
+        #receipt { background: white; border-radius: 15px; margin: 20px auto; padding: 20px; border: 2px dashed #27ae60; text-align: right; max-width: 550px; }
+        .product-item { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding: 10px 0; align-items: center; }
+        
+        .btn-clear { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; }
+        .delete-btn { color: #e74c3c; cursor: pointer; font-weight: bold; border: none; background: none; font-size: 18px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>بقالية أبو هاشم 🛒</h1>
+        <p>نظام البيع المتطور (بالقطعة والكيلو)</p>
+    </header>
+
+    <div class="cart-bar">
+        <span>الإجمالي: <span id="total-price">0</span> ل.س</span>
+        <button class="btn-clear" onclick="clearAll()">تصفير السلة 🗑️</button>
+    </div>
+
+    <div id="shop-container"></div>
+
+    <div id="receipt">
+        <strong>🧾 الفاتورة التفصيلية:</strong>
+        <div id="items-list" style="margin-top:10px;">السلة فارغة حالياً.</div>
+    </div>
+
+    <script>
+        // 1. المستودع
+        const products = [
+            { name: "بندورة 🍅", price: 17000, img: "https://cdn-icons-png.flaticon.com/512/1202/1202125.png" },
+            { name: "خيار 🥒", price: 7000, img: "https://cdn-icons-png.flaticon.com/512/2347/2347030.png" },
+            { name: "متة 🧉", price: 28000, img: "https://cdn-icons-png.flaticon.com/512/924/924514.png" },
+            { name: "بطاطا 🥔", price: 10000, img: "https://cdn-icons-png.flaticon.com/512/1135/1135544.png" }
+        ];
+
+        // 2. استرجاع البيانات من الذاكرة الدائمة
+        let total = parseFloat(localStorage.getItem("total_v2")) || 0;
+        let cart = JSON.parse(localStorage.getItem("cart_v2")) || []; // استخدمنا مصفوفة هنا لتخزين كل عملية وزن منفصلة
+
+        function displayProducts() {
+            const container = document.getElementById("shop-container");
+            products.forEach((item, index) => {
+                container.innerHTML += `
+                    <div class="card">
+                        <img src="${item.img}" class="product-img">
+                        <h3>${item.name}</h3>
+                        <p class="price">${item.price.toLocaleString()} ل.س</p>
+                        <input type="number" id="weight-${index}" class="weight-input" step="0.1" placeholder="الوزن أو العدد">
+                        <button class="btn-add" onclick="addToCartWithWeight(${index})">إضافة للسلة</button>
+                    </div>`;
+            });
+        }
+
+        function addToCartWithWeight(index) {
+            const product = products[index];
+            const weightInput = document.getElementById(`weight-${index}`);
+            const weight = parseFloat(weightInput.value);
+
+            if (isNaN(weight) || weight <= 0) {
+                alert("يرجى إدخال رقم صحيح (وزن أو عدد)");
+                return;
+            }
+
+            const subTotal = product.price * weight;
+            total += subTotal;
+
+            // إضافة العملية للسلة
+            cart.push({
+                id: Date.now(), // معرف فريد لكل عملية حذف
+                name: product.name,
+                weight: weight,
+                subTotal: subTotal
+            });
+
+            weightInput.value = ""; // تصفير الحقل
+            saveAndRender();
+        }
+
+        function removeItem(id) {
+            const index = cart.findIndex(item => item.id === id);
+            if (index !== -1) {
+                total -= cart[index].subTotal;
+                cart.splice(index, 1);
+                saveAndRender();
+            }
+        }
+
+        function clearAll() {
+            if(confirm("هل تريد مسح الفاتورة؟")) {
+                total = 0;
+                cart = [];
+                saveAndRender();
+            }
+        }
+
+        function saveAndRender() {
+            localStorage.setItem("total_v2", total);
+            localStorage.setItem("cart_v2", JSON.stringify(cart));
+            renderReceipt();
+        }
+
+        function renderReceipt() {
+            document.getElementById("total-price").innerText = total.toLocaleString();
+            const list = document.getElementById("items-list");
+            list.innerHTML = "";
+
+            if (cart.length === 0) {
+                list.innerHTML = "السلة فارغة حالياً.";
+                return;
+            }
+
+            cart.forEach(item => {
+                list.innerHTML += `
+                    <div class="product-item">
+                        <span>${item.name} (الوزن: ${item.weight})</span>
+                        <span>
+                            ${item.subTotal.toLocaleString()} ل.س
+                            <button class="delete-btn" onclick="removeItem(${item.id})">×</button>
+                        </span>
+                    </div>`;
+            });
+        }
+
+        displayProducts();
+        renderReceipt();
+    </script>
+</body>
+</html>
